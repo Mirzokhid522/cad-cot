@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Market Bulls - COT Data Dashboard</title>
-    <!-- Tailwind CSS CDN for styling -->
+    <title>COT & Technical Analysis Dashboard</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- ApexCharts CDN for candlestick chart -->
+    <!-- ApexCharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        darkbg: '#000000',
-                        cardbg: '#000000',
+                        darkbg: '#191919',
+                        cardbg: '#202020',
                         cyanaccent: '#09B2E7',
                         purpleaccent: '#894BA9'
                     }
@@ -27,32 +27,35 @@
 
     <div class="max-w-6xl mx-auto space-y-6">
         <!-- Header -->
-        <header class="flex justify-between items-center border-b border-gray-900 pb-4">
-            <h1 class="text-2xl font-bold tracking-wider text-cyanaccent">MARKET BULLS <span class="text-gray-500 text-sm font-normal">| COT Dashboard</span></h1>
+        <header class="flex justify-between items-center border-b border-[rgba(255,255,255,0.08)] pb-4">
+            <h1 class="text-xl font-bold tracking-wider text-cyanaccent">CAD <span class="text-gray-500 text-sm font-normal">| COT & Technical Dashboard</span></h1>
             <div id="currency-selector" class="flex gap-2">
-                <button onclick="loadData('USD')" class="px-4 py-2 bg-cyanaccent text-darkbg font-semibold rounded shadow transition hover:opacity-90">USD</button>
+                <button onclick="loadData('CAD')" class="px-4 py-2 bg-cyanaccent text-[#191919] font-semibold rounded shadow transition hover:opacity-90">CAD</button>
             </div>
         </header>
 
         <!-- Chart Container Card -->
-        <div class="bg-cardbg rounded-xl p-6 shadow-xl border border-gray-900">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="chart-title" class="text-lg font-semibold text-gray-300">CAD Price Chart</h2>
+        <div class="bg-cardbg rounded-xl p-6 shadow-xl border border-[rgba(255,255,255,0.08)]">
+            <div class="flex justify-between items-center mb-2">
+                <h2 id="chart-title" class="text-lg font-semibold text-gray-300">CAD Price Chart & RSI Indicator</h2>
             </div>
+            <!-- Candlestick Main Chart -->
             <div id="candlestick-chart" class="w-full"></div>
+            <!-- Clean RSI Sub-Chart -->
+            <div id="rsi-chart" class="w-full mt-4"></div>
         </div>
 
         <!-- Main Content Card (Table) -->
-        <div class="bg-cardbg rounded-xl p-6 shadow-xl border border-gray-900">
+        <div class="bg-cardbg rounded-xl p-6 shadow-xl border border-[rgba(255,255,255,0.08)]">
             <div class="flex justify-between items-center mb-4">
                 <h2 id="table-title" class="text-lg font-semibold text-gray-300">CAD Candlestick & COT Records</h2>
-                <span id="row-count" class="text-xs bg-gray-900 px-3 py-1 rounded-full text-gray-400 border border-gray-800">Loading rows...</span>
+                <span id="row-count" class="text-xs bg-[#191919] px-3 py-1 rounded-full text-gray-400 border border-[rgba(255,255,255,0.08)]">Loading rows...</span>
             </div>
 
             <!-- Table Container -->
-            <div class="overflow-x-auto max-h-[400px] rounded-lg border border-gray-900">
+            <div class="overflow-x-auto max-h-[400px] rounded-lg border border-[rgba(255,255,255,0.08)]">
                 <table class="w-full text-left border-collapse">
-                    <thead class="bg-black sticky top-0 text-gray-400 uppercase text-xs tracking-wider border-b border-gray-900">
+                    <thead class="bg-[#191919] sticky top-0 text-gray-400 uppercase text-xs tracking-wider border-b border-[rgba(255,255,255,0.08)]">
                         <tr>
                             <th class="p-3">#</th>
                             <th class="p-3">Date</th>
@@ -63,7 +66,7 @@
                             <th class="p-3">Trend Color</th>
                         </tr>
                     </thead>
-                    <tbody id="cot-table-body" class="divide-y divide-gray-900 text-sm">
+                    <tbody id="cot-table-body" class="divide-y divide-[rgba(255,255,255,0.04)] text-sm">
                         <!-- Data rows injected via JavaScript -->
                     </tbody>
                 </table>
@@ -72,23 +75,68 @@
     </div>
 
     <script>
-        let chart = null;
+        let mainChart = null;
+        let rsiChartInstance = null;
+
+        // Mathematical calculation helper for Relative Strength Index (RSI - 14 period)
+        function calculateRSI(data, period = 14) {
+            let rsiArray = [];
+            let gains = 0;
+            let losses = 0;
+
+            for (let i = 0; i < data.length; i++) {
+                let timestamp = data[i].x;
+                let close = data[i].y[3];
+                
+                if (i === 0) {
+                    rsiArray.push([timestamp, null]);
+                    continue;
+                }
+
+                let change = close - data[i - 1].y[3];
+                let gain = change > 0 ? change : 0;
+                let loss = change < 0 ? -change : 0;
+
+                if (i <= period) {
+                    gains += gain;
+                    losses += loss;
+                    if (i === period) {
+                        let avgGain = gains / period;
+                        let avgLoss = losses / period;
+                        let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                        let rsi = 100 - (100 / (1 + rs));
+                        rsiArray.push([timestamp, Number(rsi.toFixed(2))]);
+                    } else {
+                        rsiArray.push([timestamp, null]);
+                    }
+                } else {
+                    let currentGain = (gains * (period - 1) + gain) / period;
+                    let currentLoss = (losses * (period - 1) + loss) / period;
+                    gains = currentGain;
+                    losses = currentLoss;
+                    let rs = currentLoss === 0 ? 100 : currentGain / currentLoss;
+                    let rsi = 100 - (100 / (1 + rs));
+                    rsiArray.push([timestamp, Number(rsi.toFixed(2))]);
+                }
+            }
+            return rsiArray;
+        }
 
         async function loadData(currency) {
             document.getElementById('table-title').innerText = `${currency} Candlestick & COT Records`;
-            document.getElementById('chart-title').innerText = `${currency} Price Chart`;
+            document.getElementById('chart-title').innerText = `${currency} Price Chart & RSI Indicator`;
             const tableBody = document.getElementById('cot-table-body');
             tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-gray-600">Loading data for ${currency}...</td></tr>`;
 
             try {
-                const response = await fetch(`/api/cot-data?currency=${currency}`);
+                const response = await fetch(`/api/cot-data?currency=${currency.toLowerCase()}`);
                 const result = await response.json();
 
                 if (result.status === 'success' && result.data.length > 0) {
                     tableBody.innerHTML = '';
                     document.getElementById('row-count').innerText = `${result.data.length} Records Loaded`;
 
-                    let chartData = [];
+                    let candlestickData = [];
 
                     result.data.forEach((row) => {
                         const colorBadge = row.color === 'Cyan' 
@@ -96,9 +144,9 @@
                             : `<span class="px-2 py-1 rounded text-xs font-bold bg-[#894BA9]/10 text-purple-400 border border-[#894BA9]/20">Purple (Bearish)</span>`;
 
                         const tr = document.createElement('tr');
-                        tr.className = 'hover:bg-gray-900/40 transition';
+                        tr.className = 'hover:bg-[#282828] transition';
                         tr.innerHTML = `
-                            <td class="p-3 text-gray-600">${row.index}</td>
+                            <td class="p-3 text-gray-500">${row.index}</td>
                             <td class="p-3 font-medium text-gray-300">${row.date}</td>
                             <td class="p-3 font-mono text-gray-400">${row.open}</td>
                             <td class="p-3 font-mono text-emerald-400">${row.high}</td>
@@ -108,16 +156,19 @@
                         `;
                         tableBody.appendChild(tr);
 
-                        chartData.push({
+                        candlestickData.push({
                             x: new Date(row.date),
                             y: [row.open, row.high, row.low, row.close]
                         });
                     });
 
-                    renderChart(chartData);
+                    // Calculate RSI (14)
+                    const rsiData = calculateRSI(candlestickData, 14);
+
+                    renderCharts(candlestickData, rsiData);
 
                 } else {
-                    tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-rose-400">No data available for ${currency}. Run harvester script.</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-rose-400">No data available for ${currency}.</td></tr>`;
                     document.getElementById('row-count').innerText = `0 Records`;
                 }
             } catch (error) {
@@ -126,51 +177,125 @@
             }
         }
 
-        function renderChart(data) {
-            const chartOptions = {
+        function renderCharts(candlestickData, rsiData) {
+            // Main Candlestick Chart Options
+            const mainOptions = {
                 chart: {
                     type: 'candlestick',
-                    height: 350,
-                    background: '#000000',
+                    height: 380,
+                    background: '#202020',
+                    id: 'candles',
+                    group: 'marketCharts',
                     toolbar: { show: false }
                 },
                 series: [{
-                    data: data
+                    name: 'Price',
+                    data: candlestickData
                 }],
-                theme: {
-                    mode: 'dark'
-                },
                 plotOptions: {
                     candlestick: {
                         colors: {
-                            upward: '#09B2E7',   
+                            upward: '#09B2E7',    
                             downward: '#894BA9'  
                         }
                     }
                 },
                 xaxis: {
                     type: 'datetime',
-                    labels: { style: { colors: '#6b7280' } },
-                    axisBorder: { color: '#111827' },
-                    axisTicks: { color: '#111827' }
+                    labels: { style: { colors: '#9b9a97', fontSize: '11px' } },
+                    axisBorder: { color: 'rgba(255,255,255,0.08)' },
+                    axisTicks: { color: 'rgba(255,255,255,0.08)' }
                 },
                 yaxis: {
                     tooltip: { enabled: true },
-                    labels: { style: { colors: '#6b7280' } }
+                    labels: { style: { colors: '#9b9a97', fontSize: '11px' } }
                 },
                 grid: {
-                    borderColor: '#111827'
+                    borderColor: 'rgba(255,255,255,0.05)',
+                    strokeDashArray: 3
+                },
+                tooltip: {
+                    theme: 'dark'
                 }
             };
 
-            if (chart) {
-                chart.destroy();
-            }
-            chart = new ApexCharts(document.querySelector("#candlestick-chart"), chartOptions);
-            chart.render();
+            // Professional Clean RSI Sub-Chart Options
+            const rsiOptions = {
+                chart: {
+                    type: 'line',
+                    height: 150,
+                    background: '#202020',
+                    id: 'rsi',
+                    group: 'marketCharts',
+                    toolbar: { show: false },
+                    animations: { enabled: false }
+                },
+                series: [{
+                    name: 'RSI (14)',
+                    data: rsiData
+                }],
+                stroke: {
+                    width: 2,
+                    curve: 'smooth'
+                },
+                colors: ['#38bdf8'],
+                xaxis: {
+                    type: 'datetime',
+                    labels: { show: true, style: { colors: '#9b9a97', fontSize: '11px' } },
+                    axisBorder: { color: 'rgba(255,255,255,0.08)' },
+                    axisTicks: { color: 'rgba(255,255,255,0.08)' }
+                },
+                yaxis: {
+                    min: 0,
+                    max: 100,
+                    tickAmount: 2,
+                    labels: { style: { colors: '#9b9a97', fontSize: '11px' } }
+                },
+                grid: {
+                    borderColor: 'rgba(255,255,255,0.05)',
+                    strokeDashArray: 3
+                },
+                annotations: {
+                    yaxis: [
+                        {
+                            y: 70,
+                            borderColor: 'rgba(239, 68, 68, 0.6)',
+                            strokeDashArray: 4,
+                            label: {
+                                text: '70 (Overbought)',
+                                borderColor: 'transparent',
+                                style: { background: 'transparent', color: '#ef4444', fontSize: '10px', fontWeight: '600' }
+                            }
+                        },
+                        {
+                            y: 30,
+                            borderColor: 'rgba(34, 197, 94, 0.6)',
+                            strokeDashArray: 4,
+                            label: {
+                                text: '30 (Oversold)',
+                                borderColor: 'transparent',
+                                style: { background: 'transparent', color: '#22c55e', fontSize: '10px', fontWeight: '600' }
+                            }
+                        }
+                    ]
+                },
+                tooltip: {
+                    theme: 'dark'
+                }
+            };
+
+            if (mainChart) mainChart.destroy();
+            if (rsiChartInstance) rsiChartInstance.destroy();
+
+            mainChart = new ApexCharts(document.querySelector("#candlestick-chart"), mainOptions);
+            mainChart.render();
+
+            rsiChartInstance = new ApexCharts(document.querySelector("#rsi-chart"), rsiOptions);
+            rsiChartInstance.render();
         }
 
-        loadData('cad');
+        // Load CAD by default on startup
+        loadData('CAD');
     </script>
 </body>
 </html>
